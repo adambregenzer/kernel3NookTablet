@@ -766,9 +766,14 @@ static int rproc_add_mem_entry(struct rproc *rproc, struct fw_resource *rsc)
 		 * carveouts we don't care about in a core dump.
 		 * Perhaps the ION carveout should be reported as RSC_DEVMEM.
 		 */
+
+#ifdef CONFIG_ION_OMAP_DYNAMIC
+		me->core = (rsc->type == RSC_CARVEOUT && rsc->pa != 0x80000000);
+#else
 		me->core = (rsc->type == RSC_CARVEOUT &&
 				strcmp(rsc->name, "IPU_MEM_IOBUFS") &&
 				strcmp(rsc->name, "DSP_MEM_IOBUFS"));
+#endif
 #endif
 	}
 
@@ -890,6 +895,10 @@ static int rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc,
 				}
 				rsc->pa = pa;
 			} else {
+					pr_info("RSC_CARVEOUT handle_resources, name == %s\n", rsc->name);
+#ifdef CONFIG_ION_OMAP_DYNAMIC
+				if (strcmp(rsc->name, "IPU_MEM_IOBUFS") != 0)
+#endif
 				ret = rproc_check_poolmem(rproc, rsc->len, pa);
 				/*
 				 * ignore the error for DSP buffers as they can
@@ -1113,7 +1122,7 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 	u64 bootaddr = 0;
 	struct fw_header *image;
 	struct fw_section *section;
-	int left, ret = -EINVAL;
+	int left, ret;
 
 	if (!fw) {
 		dev_err(dev, "%s: failed to load %s\n", __func__, fwfile);
@@ -1135,7 +1144,7 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 		goto out;
 	}
 
-	dev_dbg(dev, "BIOS image version is %d\n", image->version);
+	dev_info(dev, "BIOS image version is %d\n", image->version);
 
 	rproc->header = kzalloc(image->header_len, GFP_KERNEL);
 	if (!rproc->header) {
